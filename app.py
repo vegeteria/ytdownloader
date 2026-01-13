@@ -333,10 +333,13 @@ def download_video(task_id, url, quality, format_type):
         
         source_file = downloaded_files[0]
         
-        # Determine final filename
-        safe_title = re.sub(r'[^\w\s-]', '', info.get('title', 'video'))[:50]
-        final_filename = f"{task_id}_{safe_title}.{final_ext}"
-        final_path = CONVERTED_DIR / final_filename
+        # Determine final filename (internal with task_id for uniqueness)
+        safe_title = re.sub(r'[^\w\s-]', '', info.get('title', 'video'))[:255].strip()
+        internal_filename = f"{task_id}_{safe_title}.{final_ext}"
+        final_path = CONVERTED_DIR / internal_filename
+        
+        # User-friendly download name (just the video title)
+        download_name = f"{safe_title}.{final_ext}"
         
         # Move file to converted directory
         import shutil
@@ -360,7 +363,8 @@ def download_video(task_id, url, quality, format_type):
         # Update task status
         tasks[task_id]['status'] = 'ready'
         tasks[task_id]['filepath'] = str(final_path)
-        tasks[task_id]['filename'] = final_filename
+        tasks[task_id]['filename'] = internal_filename
+        tasks[task_id]['download_name'] = download_name  # User-friendly name
         tasks[task_id]['expiry'] = expiry_timestamp
         tasks[task_id]['title'] = info.get('title')
         
@@ -468,14 +472,22 @@ def download_file(task_id):
     # Check in-memory tasks first
     if task_id in tasks and tasks[task_id].get('filepath'):
         filepath = tasks[task_id]['filepath']
-        filename = tasks[task_id].get('filename', 'download')
+        # Use the user-friendly download name (video title)
+        download_name = tasks[task_id].get('download_name') or tasks[task_id].get('title', 'download')
+        # Ensure it has the correct extension
+        ext = Path(filepath).suffix
+        if not download_name.endswith(ext):
+            download_name = f"{download_name}{ext}"
     else:
         # Check database
         record = get_download_record(task_id)
         if not record:
             return jsonify({'error': 'File not found'}), 404
         filepath = record['filepath']
-        filename = Path(filepath).name
+        # Use video title from database
+        ext = Path(filepath).suffix
+        safe_title = re.sub(r'[^\w\s-]', '', record.get('title', 'download'))[:255].strip()
+        download_name = f"{safe_title}{ext}"
     
     if not Path(filepath).exists():
         return jsonify({'error': 'File no longer exists'}), 404
@@ -483,7 +495,7 @@ def download_file(task_id):
     return send_file(
         filepath,
         as_attachment=True,
-        download_name=filename
+        download_name=download_name
     )
 
 # =============================================================================
