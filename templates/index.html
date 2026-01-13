@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Downloader</title>
+    <meta name="description" content="Download YouTube videos in multiple qualities and formats">
+    
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#fef2f2',
+                            100: '#fee2e2',
+                            200: '#fecaca',
+                            300: '#fca5a5',
+                            400: '#f87171',
+                            500: '#ef4444',
+                            600: '#dc2626',
+                            700: '#b91c1c',
+                            800: '#991b1b',
+                            900: '#7f1d1d',
+                        },
+                        dark: {
+                            100: '#1e1e2e',
+                            200: '#181825',
+                            300: '#11111b',
+                            400: '#0a0a0f',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+        }
+        
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .glass-dark {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 50%, #f39c12 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .btn-gradient {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(238, 90, 36, 0.3);
+        }
+        
+        .btn-gradient:disabled {
+            opacity: 0.5;
+            transform: none;
+            cursor: not-allowed;
+        }
+        
+        .input-glow:focus {
+            box-shadow: 0 0 0 3px rgba(238, 90, 36, 0.2);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #ff6b6b 0%, #ee5a24 50%, #f39c12 100%);
+            background-size: 200% 100%;
+            animation: gradient-shift 2s ease infinite;
+        }
+        
+        @keyframes gradient-shift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(238, 90, 36, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(238, 90, 36, 0.5); }
+        }
+        
+        .quality-btn {
+            transition: all 0.2s ease;
+        }
+        
+        .quality-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .quality-btn.selected {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            border-color: transparent;
+        }
+        
+        .format-option {
+            transition: all 0.2s ease;
+        }
+        
+        .format-option:hover {
+            border-color: rgba(238, 90, 36, 0.5);
+        }
+        
+        .format-option.selected {
+            border-color: #ee5a24;
+            background: rgba(238, 90, 36, 0.1);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #ee5a24;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* YouTube embed responsive */
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+        }
+        
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body class="text-white">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Header -->
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold mb-4">
+                <span class="gradient-text">YouTube</span> Downloader
+            </h1>
+            <p class="text-gray-400 text-lg">Download videos in any quality • Multiple formats</p>
+        </header>
+        
+        <!-- URL Input Section -->
+        <section id="url-section" class="glass rounded-2xl p-6 mb-8">
+            <form id="url-form" class="flex flex-col md:flex-row gap-4">
+                <input 
+                    type="url" 
+                    id="url-input"
+                    name="url" 
+                    placeholder="Paste YouTube URL here..."
+                    class="flex-1 bg-dark-200 border border-gray-700 rounded-xl px-5 py-4 text-white placeholder-gray-500 focus:outline-none input-glow transition-all"
+                    required
+                >
+                <button 
+                    type="submit" 
+                    id="fetch-btn"
+                    class="btn-gradient px-8 py-4 rounded-xl font-semibold text-white flex items-center justify-center gap-2 min-w-[140px]"
+                >
+                    <span id="fetch-text">Fetch Video</span>
+                    <div id="fetch-spinner" class="spinner hidden"></div>
+                </button>
+            </form>
+            <p id="url-error" class="text-red-400 mt-3 hidden"></p>
+        </section>
+        
+        <!-- Video Preview & Options Section (Hidden initially) -->
+        <section id="video-section" class="hidden fade-in">
+            <!-- Video Preview -->
+            <div class="glass rounded-2xl p-6 mb-6">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- YouTube Embed -->
+                    <div class="video-container rounded-xl overflow-hidden">
+                        <iframe 
+                            id="video-embed"
+                            src=""
+                            title="YouTube video player"
+                            frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen
+                        ></iframe>
+                    </div>
+                    
+                    <!-- Video Info -->
+                    <div class="flex flex-col justify-center">
+                        <h2 id="video-title" class="text-xl font-semibold mb-3 line-clamp-2"></h2>
+                        <p id="video-channel" class="text-gray-400 mb-2"></p>
+                        <div class="flex items-center gap-4 text-sm text-gray-500">
+                            <span id="video-duration" class="flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span></span>
+                            </span>
+                            <span id="video-views" class="flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                                <span></span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quality Selection -->
+            <div class="glass rounded-2xl p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m3 0v16a2 2 0 01-2 2H6a2 2 0 01-2-2V4h16zM10 9v6m4-6v6"></path>
+                    </svg>
+                    Select Quality
+                </h3>
+                <div id="quality-options" class="flex flex-wrap gap-3">
+                    <!-- Qualities will be populated dynamically -->
+                </div>
+            </div>
+            
+            <!-- Format Selection -->
+            <div class="glass rounded-2xl p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                    </svg>
+                    Select Format
+                </h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <button 
+                        type="button" 
+                        class="format-option border border-gray-600 rounded-xl p-4 text-center selected" 
+                        data-format="video+audio"
+                    >
+                        <div class="text-2xl mb-2">🎬</div>
+                        <div class="font-medium">Video + Audio</div>
+                        <div class="text-xs text-gray-400">MP4</div>
+                    </button>
+                    <button 
+                        type="button" 
+                        class="format-option border border-gray-600 rounded-xl p-4 text-center" 
+                        data-format="video"
+                    >
+                        <div class="text-2xl mb-2">📹</div>
+                        <div class="font-medium">Video Only</div>
+                        <div class="text-xs text-gray-400">MP4 (no audio)</div>
+                    </button>
+                    <button 
+                        type="button" 
+                        class="format-option border border-gray-600 rounded-xl p-4 text-center" 
+                        data-format="audio_mp3"
+                    >
+                        <div class="text-2xl mb-2">🎵</div>
+                        <div class="font-medium">Audio Only</div>
+                        <div class="text-xs text-gray-400">MP3 320kbps</div>
+                    </button>
+                    <button 
+                        type="button" 
+                        class="format-option border border-gray-600 rounded-xl p-4 text-center" 
+                        data-format="audio_m4a"
+                    >
+                        <div class="text-2xl mb-2">🎧</div>
+                        <div class="font-medium">Audio Only</div>
+                        <div class="text-xs text-gray-400">M4A (AAC)</div>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Download Button -->
+            <div class="text-center">
+                <button 
+                    id="download-btn"
+                    class="btn-gradient px-12 py-4 rounded-xl font-semibold text-lg flex items-center justify-center gap-3 mx-auto"
+                >
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    <span>Download</span>
+                </button>
+            </div>
+        </section>
+        
+        <!-- Download Progress Section (Hidden initially) -->
+        <section id="progress-section" class="hidden fade-in">
+            <div class="glass rounded-2xl p-8 text-center">
+                <div id="progress-status" class="mb-6">
+                    <div class="spinner mx-auto mb-4 w-12 h-12"></div>
+                    <p id="progress-text" class="text-lg text-gray-300">Preparing download...</p>
+                </div>
+                
+                <div id="progress-bar-container" class="hidden mb-6">
+                    <div class="bg-gray-700 rounded-full h-3 overflow-hidden">
+                        <div id="progress-bar" class="progress-bar h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p id="progress-percent" class="text-sm text-gray-400 mt-2">0%</p>
+                </div>
+                
+                <div id="download-ready" class="hidden">
+                    <div class="text-green-400 text-6xl mb-4">✓</div>
+                    <h3 id="ready-title" class="text-xl font-semibold mb-2"></h3>
+                    <p id="ready-expiry" class="text-gray-400 mb-6"></p>
+                    <a 
+                        id="download-link"
+                        href="#"
+                        class="btn-gradient inline-flex items-center gap-2 px-8 py-4 rounded-xl font-semibold"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Download File
+                    </a>
+                    <button 
+                        id="new-download-btn"
+                        class="block mx-auto mt-4 text-gray-400 hover:text-white transition-colors"
+                    >
+                        ← Download another video
+                    </button>
+                </div>
+                
+                <div id="download-error" class="hidden">
+                    <div class="text-red-400 text-6xl mb-4">✕</div>
+                    <h3 class="text-xl font-semibold mb-2 text-red-400">Download Failed</h3>
+                    <p id="error-message" class="text-gray-400 mb-6"></p>
+                    <button 
+                        id="retry-btn"
+                        class="btn-gradient px-8 py-4 rounded-xl font-semibold"
+                    >
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Footer -->
+        <footer class="text-center mt-12 text-gray-500 text-sm">
+            <p>Files are automatically deleted after the retention period</p>
+            <p class="mt-1">Retention = max(2 hours, video duration)</p>
+        </footer>
+    </div>
+    
+    <script>
+        // State
+        let currentVideoInfo = null;
+        let selectedQuality = 'best';
+        let selectedFormat = 'video+audio';
+        let currentTaskId = null;
+        let pollInterval = null;
+        
+        // DOM Elements
+        const urlForm = document.getElementById('url-form');
+        const urlInput = document.getElementById('url-input');
+        const fetchBtn = document.getElementById('fetch-btn');
+        const fetchText = document.getElementById('fetch-text');
+        const fetchSpinner = document.getElementById('fetch-spinner');
+        const urlError = document.getElementById('url-error');
+        
+        const urlSection = document.getElementById('url-section');
+        const videoSection = document.getElementById('video-section');
+        const progressSection = document.getElementById('progress-section');
+        
+        const videoEmbed = document.getElementById('video-embed');
+        const videoTitle = document.getElementById('video-title');
+        const videoChannel = document.getElementById('video-channel');
+        const videoDuration = document.getElementById('video-duration');
+        const videoViews = document.getElementById('video-views');
+        const qualityOptions = document.getElementById('quality-options');
+        
+        const downloadBtn = document.getElementById('download-btn');
+        
+        const progressStatus = document.getElementById('progress-status');
+        const progressText = document.getElementById('progress-text');
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressPercent = document.getElementById('progress-percent');
+        
+        const downloadReady = document.getElementById('download-ready');
+        const readyTitle = document.getElementById('ready-title');
+        const readyExpiry = document.getElementById('ready-expiry');
+        const downloadLink = document.getElementById('download-link');
+        
+        const downloadError = document.getElementById('download-error');
+        const errorMessage = document.getElementById('error-message');
+        
+        // Event Listeners
+        urlForm.addEventListener('submit', handleFetchVideo);
+        downloadBtn.addEventListener('click', handleStartDownload);
+        document.getElementById('new-download-btn').addEventListener('click', resetToStart);
+        document.getElementById('retry-btn').addEventListener('click', resetToStart);
+        
+        // Format selection
+        document.querySelectorAll('.format-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.format-option').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                selectedFormat = btn.dataset.format;
+            });
+        });
+        
+        // Fetch video info
+        async function handleFetchVideo(e) {
+            e.preventDefault();
+            
+            const url = urlInput.value.trim();
+            if (!url) return;
+            
+            // Show loading state
+            fetchBtn.disabled = true;
+            fetchText.textContent = 'Fetching...';
+            fetchSpinner.classList.remove('hidden');
+            urlError.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to fetch video info');
+                }
+                
+                currentVideoInfo = data;
+                currentVideoInfo.url = url;
+                displayVideoInfo(data);
+                
+            } catch (error) {
+                urlError.textContent = error.message;
+                urlError.classList.remove('hidden');
+            } finally {
+                fetchBtn.disabled = false;
+                fetchText.textContent = 'Fetch Video';
+                fetchSpinner.classList.add('hidden');
+            }
+        }
+        
+        // Display video info
+        function displayVideoInfo(info) {
+            // Set embed
+            videoEmbed.src = `https://www.youtube.com/embed/${info.video_id}`;
+            
+            // Set info
+            videoTitle.textContent = info.title;
+            videoChannel.textContent = info.channel || '';
+            videoDuration.querySelector('span:last-child').textContent = info.duration_formatted;
+            
+            if (info.view_count) {
+                videoViews.querySelector('span:last-child').textContent = formatViews(info.view_count);
+                videoViews.classList.remove('hidden');
+            }
+            
+            // Populate quality options
+            qualityOptions.innerHTML = '';
+            
+            // Add "Best" option
+            const bestBtn = createQualityButton('Best Quality', 'best', true);
+            qualityOptions.appendChild(bestBtn);
+            
+            // Add available qualities
+            info.qualities.forEach(quality => {
+                const btn = createQualityButton(quality, quality);
+                qualityOptions.appendChild(btn);
+            });
+            
+            selectedQuality = 'best';
+            
+            // Show video section
+            videoSection.classList.remove('hidden');
+            videoSection.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function createQualityButton(label, value, selected = false) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `quality-btn px-4 py-2 rounded-lg border ${selected ? 'selected' : 'border-gray-600 hover:border-orange-400'}`;
+            btn.textContent = label;
+            btn.dataset.quality = value;
+            
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.quality-btn').forEach(b => {
+                    b.classList.remove('selected');
+                    b.classList.add('border-gray-600');
+                });
+                btn.classList.add('selected');
+                btn.classList.remove('border-gray-600');
+                selectedQuality = value;
+            });
+            
+            return btn;
+        }
+        
+        // Start download
+        async function handleStartDownload() {
+            if (!currentVideoInfo) return;
+            
+            downloadBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/download', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: currentVideoInfo.url,
+                        quality: selectedQuality,
+                        format_type: selectedFormat
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to start download');
+                }
+                
+                currentTaskId = data.task_id;
+                showProgressSection();
+                startPolling();
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+                downloadBtn.disabled = false;
+            }
+        }
+        
+        function showProgressSection() {
+            videoSection.classList.add('hidden');
+            progressSection.classList.remove('hidden');
+            progressStatus.classList.remove('hidden');
+            downloadReady.classList.add('hidden');
+            downloadError.classList.add('hidden');
+            progressBarContainer.classList.add('hidden');
+            progressText.textContent = 'Preparing download...';
+        }
+        
+        function startPolling() {
+            pollInterval = setInterval(checkStatus, 2000);
+            checkStatus(); // Initial check
+        }
+        
+        async function checkStatus() {
+            if (!currentTaskId) return;
+            
+            try {
+                const response = await fetch(`/status/${currentTaskId}`);
+                const data = await response.json();
+                
+                if (data.status === 'queued') {
+                    progressText.textContent = 'Queued, waiting to start...';
+                    progressBarContainer.classList.add('hidden');
+                    
+                } else if (data.status === 'downloading') {
+                    progressText.textContent = 'Downloading...';
+                    progressBarContainer.classList.remove('hidden');
+                    progressBar.style.width = `${data.progress}%`;
+                    progressPercent.textContent = `${data.progress}%`;
+                    
+                } else if (data.status === 'converting') {
+                    progressText.textContent = 'Converting to final format...';
+                    progressBar.style.width = '100%';
+                    progressPercent.textContent = 'Processing...';
+                    
+                } else if (data.status === 'ready') {
+                    clearInterval(pollInterval);
+                    showDownloadReady(data);
+                    
+                } else if (data.status === 'error') {
+                    clearInterval(pollInterval);
+                    showDownloadError(data.error);
+                }
+                
+            } catch (error) {
+                console.error('Status check error:', error);
+            }
+        }
+        
+        function showDownloadReady(data) {
+            progressStatus.classList.add('hidden');
+            progressBarContainer.classList.add('hidden');
+            downloadReady.classList.remove('hidden');
+            
+            readyTitle.textContent = data.title || 'Download Ready';
+            
+            if (data.expiry) {
+                const expiryDate = new Date(data.expiry * 1000);
+                readyExpiry.textContent = `Available until ${expiryDate.toLocaleString()}`;
+            }
+            
+            downloadLink.href = `/file/${currentTaskId}`;
+        }
+        
+        function showDownloadError(error) {
+            progressStatus.classList.add('hidden');
+            progressBarContainer.classList.add('hidden');
+            downloadError.classList.remove('hidden');
+            errorMessage.textContent = error || 'An unknown error occurred';
+        }
+        
+        function resetToStart() {
+            clearInterval(pollInterval);
+            currentVideoInfo = null;
+            currentTaskId = null;
+            selectedQuality = 'best';
+            selectedFormat = 'video+audio';
+            
+            urlInput.value = '';
+            videoSection.classList.add('hidden');
+            progressSection.classList.add('hidden');
+            downloadBtn.disabled = false;
+            
+            // Reset format selection
+            document.querySelectorAll('.format-option').forEach((btn, index) => {
+                if (index === 0) {
+                    btn.classList.add('selected');
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
+            
+            urlInput.focus();
+        }
+        
+        function formatViews(count) {
+            if (count >= 1000000) {
+                return (count / 1000000).toFixed(1) + 'M views';
+            } else if (count >= 1000) {
+                return (count / 1000).toFixed(1) + 'K views';
+            }
+            return count + ' views';
+        }
+    </script>
+</body>
+</html>

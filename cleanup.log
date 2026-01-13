@@ -1,0 +1,16 @@
+2026-01-13 00:55:57,802 - INFO - === RUNNING CLEANUP TEST ===
+2026-01-13 00:55:57,805 - INFO - Created test file: /home/muntahi/Downloads/try/yt-downloader/converted/test_1cf057d6_test_video.mp4
+2026-01-13 00:55:57,806 - INFO - Starting cleanup...
+2026-01-13 00:55:57,806 - INFO - Processing expired: Test Video (ID: test_1cf057d6)
+2026-01-13 00:55:57,809 - INFO - Deleted: /home/muntahi/Downloads/try/yt-downloader/converted/test_1cf057d6_test_video.mp4
+2026-01-13 00:55:57,809 - INFO - Cleanup complete. Deleted 1 files.
+2026-01-13 00:55:57,809 - INFO - ✓ TEST PASSED: Test file was deleted successfully
+2026-01-13 00:55:57,809 - INFO - === TEST COMPLETE ===
+2026-01-13 01:03:29,397 - INFO - Starting cleanup...
+2026-01-13 01:03:29,397 - INFO - No expired files found.
+2026-01-13 01:03:29,397 - INFO - Checking for orphaned files in downloaded folder...
+2026-01-13 01:05:20,983 - INFO - Starting cleanup...
+2026-01-13 01:05:20,983 - INFO - Processing expired: Unmatched Clarity and Depth in 8K HDR 60fps Dolby Vision (ID: e0c730f0)
+2026-01-13 01:05:20,999 - INFO - Deleted: /home/muntahi/Downloads/try/yt-downloader/converted/e0c730f0_Unmatched Clarity and Depth in 8K HDR 60fps Dolby .mp4
+2026-01-13 01:05:20,999 - INFO - Cleanup complete. Deleted 1 files.
+2026-01-13 01:05:20,999 - INFO - Checking for orphaned files in downloaded folder...
