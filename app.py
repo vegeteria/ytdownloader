@@ -136,10 +136,18 @@ def get_yt_dlp_opts(cookies=True):
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
+        'noplaylist': True,  # Only download single video, not playlist
     }
     if cookies and COOKIES_PATH.exists():
         opts['cookiefile'] = str(COOKIES_PATH)
     return opts
+
+def clean_youtube_url(url):
+    """Clean YouTube URL by removing playlist and extra parameters."""
+    video_id = extract_video_id(url)
+    if video_id:
+        return f'https://www.youtube.com/watch?v={video_id}'
+    return url
 
 def format_duration(seconds):
     """Format duration in human-readable format."""
@@ -381,8 +389,11 @@ def get_video_info():
     if not video_id:
         return jsonify({'error': 'Invalid YouTube URL'}), 400
     
+    # Clean URL to remove playlist parameters
+    clean_url = clean_youtube_url(url)
+    
     try:
-        info = fetch_video_info(url)
+        info = fetch_video_info(clean_url)
         return jsonify(info)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -402,19 +413,22 @@ def start_download():
     if not video_id:
         return jsonify({'error': 'Invalid YouTube URL'}), 400
     
+    # Clean URL to remove playlist parameters
+    clean_url = clean_youtube_url(url)
+    
     # Create task
     task_id = str(uuid.uuid4())[:8]
     tasks[task_id] = {
         'status': 'queued',
         'progress': 0,
-        'url': url,
+        'url': clean_url,
         'quality': quality,
         'format_type': format_type,
         'video_id': video_id,
     }
     
     # Submit to executor
-    executor.submit(download_video, task_id, url, quality, format_type)
+    executor.submit(download_video, task_id, clean_url, quality, format_type)
     
     return jsonify({'task_id': task_id})
 
