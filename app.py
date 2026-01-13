@@ -137,6 +137,7 @@ def get_yt_dlp_opts(cookies=True):
         'no_warnings': True,
         'extract_flat': False,
         'noplaylist': True,  # Only download single video, not playlist
+        'ffmpeg_location': '/usr/bin',  # Explicit path to ffmpeg/ffprobe
     }
     if cookies and COOKIES_PATH.exists():
         opts['cookiefile'] = str(COOKIES_PATH)
